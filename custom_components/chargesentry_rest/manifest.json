@@ -1,0 +1,11 @@
+{
+  "domain": "chargesentry_rest",
+  "name": "ChargeSentry (REST)",
+  "version": "0.1.0",
+  "documentation": "https://github.com/skygnome/ChargeSentry-HA",
+  "codeowners": ["skygnome"],
+  "iot_class": "cloud_polling",
+  "integration_type": "hub",
+  "requirements": [],
+  "config_flow": true
+}
