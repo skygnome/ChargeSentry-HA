@@ -1,5 +1,5 @@
 DOMAIN = "chargesentry_rest"
-DEFAULT_SCAN_INTERVAL = 5  # seconds
+DEFAULT_SCAN_INTERVAL = 120  # seconds
 CONF_SERIAL = "serial"
 CONF_TOKEN = "token"  # optional bearer
 
