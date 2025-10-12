@@ -1,0 +1,15 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect ChargeSentry (REST)",
+        "description": "Enter your API details",
+        "data": {
+          "base_url": "Base URL (e.g. http://host:8000)",
+          "serial": "Charger serial",
+          "token": "Bearer token (optional)"
+        }
+      }
+    }
+  }
+}
