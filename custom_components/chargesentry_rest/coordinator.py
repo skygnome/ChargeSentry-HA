@@ -3,14 +3,16 @@ from datetime import timedelta
 import aiohttp
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.core import HomeAssistant
-from .const import DEFAULT_SCAN_INTERVAL, CONF_BASE_URL, CONF_SERIAL, CONF_TOKEN
+from .const import (
+    DEFAULT_SCAN_INTERVAL, CONF_SERIAL, CONF_TOKEN,
+    ENERGY_URL, LIVE_URL
+)
 
 class ChargeSentryCoordinator(DataUpdateCoordinator):
     def __init__(self, hass: HomeAssistant, entry):
         self.hass = hass
         self.entry = entry
-        self.base = entry.data[CONF_BASE_URL].rstrip("/")
-        self.serial = entry.data[CONF_SERIAL]
+        self.serial = entry.data[CONF_SERIAL].lower()
         self.token = entry.data.get(CONF_TOKEN)
         super().__init__(
             hass,
@@ -24,8 +26,8 @@ class ChargeSentryCoordinator(DataUpdateCoordinator):
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
 
-        live_url = f"{self.base}/ha/charger/{self.serial}/live"
-        totals_url = f"{self.base}/ha/charger/{self.serial}/totals"
+        live_url = LIVE_URL.format(serial=self.serial)
+        totals_url = ENERGY_URL.format(serial=self.serial)
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -36,13 +38,13 @@ class ChargeSentryCoordinator(DataUpdateCoordinator):
 
                 async with session.get(totals_url, headers=headers, timeout=8) as r2:
                     if r2.status != 200:
-                        raise UpdateFailed(f"Totals {r2.status}")
+                        raise UpdateFailed(f"Energy {r2.status}")
                     totals = await r2.json()
 
-            # Normalise / guard
-            power_w = float(live.get("power_w") or 0.0)
+            # Map to what sensors expect
+            power_w = float(live.get("power_w") or live.get("power") or 0.0)
             status = (live.get("status") or "unknown").lower()
-            lifetime_kwh = float(totals.get("lifetime_kwh") or 0.0)
+            lifetime_kwh = float(totals.get("lifetime_kwh") or totals.get("lifetime") or 0.0)
 
             return {
                 "live": live,
