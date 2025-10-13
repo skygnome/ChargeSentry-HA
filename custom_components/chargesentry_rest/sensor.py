@@ -4,6 +4,7 @@ from homeassistant.components.sensor.const import SensorDeviceClass
 from homeassistant.const import UnitOfEnergy, UnitOfPower
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo
+
 from .const import DOMAIN
 from .coordinator import ChargeSentryCoordinator
 
@@ -12,7 +13,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     device = DeviceInfo(
         identifiers={(DOMAIN, coordinator.serial)},
-        name=f"ChargeSentry {coordinator.serial}",
+        name="ChargeSentry",
         manufacturer="ChargeSentry",
         model="OCPP via REST",
         sw_version="server-2025.10",
@@ -32,7 +33,6 @@ class BaseCS(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        # consider offline if coordinator data missing
         return bool(self.coordinator.data)
 
 class ChargerPowerSensor(BaseCS):
@@ -40,7 +40,7 @@ class ChargerPowerSensor(BaseCS):
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = "measurement"
-    _attr_unique_id = None  # set in __init__
+    _attr_unique_id = None
 
     def __init__(self, coordinator, device):
         super().__init__(coordinator, device)
@@ -53,11 +53,11 @@ class ChargerPowerSensor(BaseCS):
 class ChargerStatusSensor(BaseCS):
     _attr_name = "Status"
     _attr_unique_id = None
+    _attr_icon = "mdi:ev-station"
 
     def __init__(self, coordinator, device):
         super().__init__(coordinator, device)
         self._attr_unique_id = f"{DOMAIN}_{coordinator.serial}_status"
-        self._attr_icon = "mdi:ev-station"
 
     @property
     def native_value(self):
@@ -75,5 +75,4 @@ class ChargerEnergySensor(BaseCS):
         self._attr_unique_id = f"{DOMAIN}_{coordinator.serial}_energy"
 
     @property
-    def native_value(self):
-        return self.coordinator.data.get("lifetime_kwh") if self.coordinator.data else None
+    de
