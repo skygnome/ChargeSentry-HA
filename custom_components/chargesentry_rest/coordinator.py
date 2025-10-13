@@ -13,9 +13,7 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-# Flip to False if your API requires the serial’s original casing
-LOWERCASE_SERIAL = True
+LOWERCASE_SERIAL = True  # flip to False if your API is case-sensitive
 
 class ChargeSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def __init__(self, hass: HomeAssistant, entry):
@@ -25,11 +23,10 @@ class ChargeSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         serial = entry.data[CONF_SERIAL]
         self.serial = serial.lower() if LOWERCASE_SERIAL else serial
 
-        # Token can be stored in options (preferred) or in initial data
+        # Prefer options token; fallback to initial data token
         opt = entry.options
         self.token = (opt.get(CONF_TOKEN) or entry.data.get(CONF_TOKEN) or "").strip()
 
-        # Enforce fixed 120s polling
         super().__init__(
             hass,
             logger=_LOGGER,
@@ -59,7 +56,6 @@ class ChargeSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         try:
-            # LIVE
             async with session.get(live_url, headers=headers, timeout=8) as r1:
                 if r1.status != 200:
                     body = await r1.text()
@@ -67,7 +63,6 @@ class ChargeSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     raise UpdateFailed(f"Live HTTP {r1.status}")
                 live = await r1.json(content_type=None)
 
-            # ENERGY
             async with session.get(totals_url, headers=headers, timeout=8) as r2:
                 if r2.status != 200:
                     body = await r2.text()
