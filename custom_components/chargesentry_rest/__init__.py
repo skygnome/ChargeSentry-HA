@@ -9,7 +9,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     await coordinator.async_config_entry_first_refresh()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Reload when options (token) change
+    entry.async_on_unload(entry.add_update_listener(_update_listener))
     return True
+
+async def _update_listener(hass: HomeAssistant, entry: ConfigEntry):
+    await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     unload = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
