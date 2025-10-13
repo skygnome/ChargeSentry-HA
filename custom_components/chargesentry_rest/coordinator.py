@@ -33,7 +33,7 @@ class ChargeSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass,
             logger=_LOGGER,
-            name=f"ChargeSentry {self.serial}",
+            name="ChargeSentry",
             update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
         )
 
