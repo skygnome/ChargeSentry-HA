@@ -3,7 +3,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from .const import DOMAIN, CONF_SERIAL, CONF_TOKEN
 
-# First-time setup (serial + optional token)
+# ----- First-time setup (serial + optional token) -----
 DATA_SCHEMA = vol.Schema({
     vol.Required(CONF_SERIAL): str,
     vol.Optional(CONF_TOKEN): str,
@@ -19,11 +19,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
 
         return self.async_create_entry(
-            title=f"ChargeSentry {serial}",
+            title="ChargeSentry",   # integration title in Devices & Services
             data=user_input,
         )
 
-# Options: allow changing the token later via “Configure”
+# ----- Options Flow (shows "Configure" so you can change Token later) -----
 class OptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
         self.entry = entry
