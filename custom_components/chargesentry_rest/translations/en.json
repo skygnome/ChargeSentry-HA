@@ -5,7 +5,8 @@
       "user": {
         "title": "Connect to ChargeSentry",
         "data": {
-          "token": "Bearer token"
+          "token": "Bearer token",
+          "serial": "Charger serial"
         }
       }
     }
@@ -14,9 +15,10 @@
     "step": {
       "init": {
         "title": "ChargeSentry options",
-        "description": "Update the API token.",
+        "description": "Update the API token or serial.",
         "data": {
-          "token": "Bearer token"
+          "token": "Bearer token",
+          "serial": "Charger serial"
         }
       }
     }
