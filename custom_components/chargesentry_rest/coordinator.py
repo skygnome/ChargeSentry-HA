@@ -16,12 +16,17 @@ class ChargeSentryDataUpdateCoordinator(DataUpdateCoordinator):
         self._serial = serial
         self.last_status_code: int | None = None
 
+    @property
+    def serial(self) -> str:
+        """Expose the charger serial for sensors and device identifiers."""
+        return self._serial
+
     async def _async_update_data(self):
         headers = {"Authorization": f"Bearer {self._token}"}
         try:
             async with aiohttp.ClientSession() as session:
                 # If your endpoints require the serial as a query/path param, add it as you already do.
-                # Examples (PSEUDO — keep your real URLs untouched):
+                # Example:
                 # live_url = f"{LIVE_URL}?serial={self._serial}"
                 # energy_url = f"{ENERGY_URL}?serial={self._serial}"
                 live_url = LIVE_URL
@@ -38,7 +43,6 @@ class ChargeSentryDataUpdateCoordinator(DataUpdateCoordinator):
                     resp.raise_for_status()
                     energy = await resp.json()
 
-                # If you need serial downstream, include it in the return
                 return {"serial": self._serial, "live": live, "energy": energy}
 
         except Exception as err:
