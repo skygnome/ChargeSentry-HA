@@ -4,16 +4,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
-from .const import DOMAIN, CONF_TOKEN
+from .const import DOMAIN, CONF_TOKEN, CONF_SERIAL
 from .coordinator import ChargeSentryDataUpdateCoordinator
 
 PLATFORMS: list[str] = ["sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    # Prefer options (mutable), fallback to data (initial setup)
-    token = entry.options.get(CONF_TOKEN, entry.data.get(CONF_TOKEN, "")).strip()
+    token = (entry.options.get(CONF_TOKEN) or entry.data.get(CONF_TOKEN) or "").strip()
+    serial = (entry.options.get(CONF_SERIAL) or entry.data.get(CONF_SERIAL) or "").strip()
 
-    coordinator = ChargeSentryDataUpdateCoordinator(hass, token=token)
+    coordinator = ChargeSentryDataUpdateCoordinator(hass, token=token, serial=serial)
     await coordinator.async_config_entry_first_refresh()
 
     if coordinator.last_status_code == 401:
