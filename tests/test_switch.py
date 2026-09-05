@@ -22,6 +22,7 @@ from .conftest import (
     ENERGY_PAYLOAD,
     LIVE_PAYLOAD,
     SERIAL,
+    mock_api_with_live,
     setup_integration,
 )
 
@@ -220,3 +221,66 @@ async def test_stopping_someone_elses_session_reports_why(
         await hass.services.async_call(
             "switch", SERVICE_TURN_OFF, {ATTR_ENTITY_ID: SWITCH}, blocking=True
         )
+
+
+async def test_preparing_with_a_stale_session_is_off(
+    hass: HomeAssistant, aioclient_mock, config_entry
+) -> None:
+    """A plugged-in car waiting to be started reads off, stale session or not.
+
+    ha/details.php picks the newest session with `finishtime IS NULL` — every
+    other endpoint in the API uses `status = '0'` — so a session that ended
+    without its finish time being written is still returned, months later, with
+    the connector sitting in `preparing`. Keying the switch on the session id
+    made that look like a charge in progress, and hid the one action the user
+    actually wanted: starting one.
+    """
+    mock_api_with_live(
+        aioclient_mock,
+        status="preparing",
+        plugged_in=True,
+        power_w=0.0,
+        session_id=512,
+        started_at="2026-03-03T16:26:00+00:00",
+    )
+
+    await setup_integration(hass, config_entry)
+
+    assert hass.states.get(SWITCH).state == "off"
+    assert hass.states.get("binary_sensor.home_charger_charging").state == "off"
+    assert hass.states.get("binary_sensor.home_charger_plugged_in").state == "on"
+    # The stale row must not surface as a live session anywhere either.
+    assert hass.states.get("sensor.home_charger_session_started").state == "unknown"
+
+
+async def test_finishing_is_off(
+    hass: HomeAssistant, aioclient_mock, config_entry
+) -> None:
+    """A stopped charge waiting to be unplugged is not a charge in progress."""
+    mock_api_with_live(aioclient_mock, status="finishing")
+
+    await setup_integration(hass, config_entry)
+    assert hass.states.get(SWITCH).state == "off"
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        ("charging", "on"),
+        ("suspendedev", "on"),
+        ("suspendedevse", "on"),
+        ("preparing", "off"),
+        ("finishing", "off"),
+        ("available", "off"),
+        ("occupied", "off"),
+        ("faulted", "off"),
+    ],
+)
+async def test_switch_state_for_every_status(
+    hass: HomeAssistant, aioclient_mock, config_entry, status: str, expected: str
+) -> None:
+    """An OCPP transaction is open while charging or suspended, and not otherwise."""
+    mock_api_with_live(aioclient_mock, status=status)
+
+    await setup_integration(hass, config_entry)
+    assert hass.states.get(SWITCH).state == expected

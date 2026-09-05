@@ -60,9 +60,18 @@ STATUS_OPTIONS: Final = [
     STATUS_UNKNOWN,
 ]
 
-# Statuses that mean current is actually flowing into the vehicle. Used to
-# decide whether a meter reading is live; whether a *session* is open is
-# answered by ``session_id``, not by these.
+# Statuses that mean an OCPP transaction is open on the connector. Charging is
+# energy flowing; the two suspended states are a transaction that is running
+# but momentarily not drawing (the car paused it, or the charger did). Every
+# other status is not a transaction: `preparing` is plugged in and waiting to
+# be started, `finishing` is stopped and waiting to be unplugged.
+TRANSACTION_STATUSES: Final = {
+    STATUS_CHARGING,
+    STATUS_SUSPENDED_EV,
+    STATUS_SUSPENDED_EVSE,
+}
+
+# Statuses that mean current is actually flowing into the vehicle.
 ACTIVE_CHARGING_STATUSES: Final = {STATUS_CHARGING}
 
 # Delayed-charge states that count as "something is armed or running".

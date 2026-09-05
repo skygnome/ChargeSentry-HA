@@ -76,13 +76,13 @@ async def async_setup_entry(
 
 
 class ChargeSentryChargingSwitch(ChargeSentryEntity, SwitchEntity):
-    """Start and stop a charge session on the charger's active connector.
+    """Start and stop a charge on the charger's active connector.
 
-    On means a session is open — the charger reports a ``session_id`` with no
-    finish time. That is deliberately not the same as "current is flowing":
-    a plugged-in car that has paused (``suspendedev``) or a charge waiting on
-    a schedule still has its session open, and turning the switch off is still
-    what ends it. Look at the Status sensor for the connector's OCPP state.
+    On means a transaction is open on the connector: it is charging, or paused
+    by the car or the charger. That deliberately includes a paused charge —
+    turning the switch off is still what ends it — and deliberately excludes
+    ``preparing``, which is a plugged-in car waiting to be started, i.e. the
+    state where turning the switch *on* is the thing to do.
 
     The state can lag a command by up to one poll while the charge point
     acknowledges it.
@@ -96,11 +96,11 @@ class ChargeSentryChargingSwitch(ChargeSentryEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        """Return whether a charge session is currently open."""
+        """Return whether a charge is currently running."""
         data = self.data
-        if data is None:
+        if data is None or data.status is None:
             return None
-        return data.session_active
+        return data.transaction_active
 
     def _resolve_connector(self, connector: int | None) -> int:
         """Return the connector to act on, defaulting to the live one."""

@@ -34,7 +34,11 @@ One device per charger, with:
 
 **Binary sensors** — Plugged in, Charging, Delayed charge armed, Fault, Charger online.
 
-**Switch** — *Charging*: turn it on to remote-start a charge, off to stop it.
+**Switch** — *Charging*: turn it on to remote-start a charge, off to stop it. It
+reads on while a charge is running, including one paused by the car or the
+charger (`suspendedev` / `suspendedevse`), and off when the connector is merely
+plugged in and waiting to be started (`preparing`) — which is exactly when you
+would turn it on.
 
 **Services** — `start_charge`, `stop_charge`, `delay_start`, `cancel_delay`.
 
@@ -140,6 +144,16 @@ with the default interval the switch can take up to a minute to reflect a
 charge you started elsewhere. Commands request an immediate refresh, but the
 charge point itself takes a few seconds to acknowledge one, so the switch may
 briefly show its old state after you flip it.
+
+### Session state comes from the connector, not the session row
+
+The API's live feed reports a session id chosen by "newest session with no
+finish time", where the rest of the API uses `status = '0'`. A session that
+ended without its finish time being written is therefore still reported, months
+later, alongside an idle connector. The integration ignores the session id when
+deciding whether a charge is running and goes by the connector's OCPP status
+instead, and suppresses the Session ID and Session started sensors unless a
+charge really is in progress.
 
 ### One connector
 

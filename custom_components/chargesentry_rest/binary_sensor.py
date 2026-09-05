@@ -31,13 +31,13 @@ def _plugged_in(data: ChargeSentryData) -> bool | None:
 
 
 def _charging(data: ChargeSentryData) -> bool | None:
-    """Return whether a charge session is open on the charger.
+    """Return whether a charge is running, paused charges included.
 
-    Matches the Charging switch: keyed on the session, not the connector
-    status, so a paused or scheduled charge still reads as on. The Status
-    sensor carries the OCPP-level detail.
+    Matches the Charging switch. The Status sensor carries the OCPP-level
+    detail — whether a running charge is actually drawing current, or is
+    suspended by the car or the charger.
     """
-    return data.session_active
+    return None if data.status is None else data.transaction_active
 
 
 def _faulted(data: ChargeSentryData) -> bool | None:
