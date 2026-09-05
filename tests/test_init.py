@@ -97,7 +97,13 @@ async def test_power_zeroed_when_idle(
     )
     aioclient_mock.get(
         f"{BASE}/v1/live/details/{SERIAL}",
-        json={**LIVE_PAYLOAD, "status": "available", "plugged_in": False},
+        json={
+            **LIVE_PAYLOAD,
+            "status": "available",
+            "plugged_in": False,
+            "session_id": None,
+            "started_at": None,
+        },
     )
     aioclient_mock.get(f"{BASE}/v1/live/energy/{SERIAL}", json=ENERGY_PAYLOAD)
     aioclient_mock.get(
@@ -109,6 +115,39 @@ async def test_power_zeroed_when_idle(
     assert hass.states.get("sensor.home_charger_power").state == "0.0"
     assert hass.states.get("sensor.home_charger_current").state == "0.0"
     assert hass.states.get("binary_sensor.home_charger_charging").state == STATE_OFF
+    assert hass.states.get("switch.home_charger_charging").state == STATE_OFF
+
+
+async def test_paused_session_is_still_on(
+    hass: HomeAssistant, aioclient_mock, config_entry
+) -> None:
+    """A plugged-in car that has paused keeps its session, and so the switch.
+
+    ha/details.php reports the connector status, which drops to suspendedev
+    while the vehicle pauses even though the session is still open. Keying the
+    switch on the status left it off mid-charge.
+    """
+    aioclient_mock.get(f"{BASE}/v1/charger/{SERIAL}/connected", json=CONNECTED_PAYLOAD)
+    aioclient_mock.get(
+        f"{BASE}/v1/charger/{CHARGER_ID}/details",
+        json={"success": True, "charger": {"id": CHARGER_ID, "name": "Home Charger"}},
+    )
+    aioclient_mock.get(
+        f"{BASE}/v1/live/details/{SERIAL}",
+        json={**LIVE_PAYLOAD, "status": "suspendedev", "power_w": 0.0},
+    )
+    aioclient_mock.get(f"{BASE}/v1/live/energy/{SERIAL}", json=ENERGY_PAYLOAD)
+    aioclient_mock.get(
+        f"{BASE}/v1/account/delaystatus/{CHARGER_ID}/1", json=DELAY_PAYLOAD
+    )
+
+    await setup_integration(hass, config_entry)
+
+    assert hass.states.get("switch.home_charger_charging").state == STATE_ON
+    assert hass.states.get("binary_sensor.home_charger_charging").state == STATE_ON
+    assert hass.states.get("sensor.home_charger_status").state == "suspendedev"
+    # The meter reading is trusted while the session is open, not flattened.
+    assert hass.states.get("sensor.home_charger_power").state == "0.0"
 
 
 async def test_missing_meter_data_is_tolerated(
@@ -210,3 +249,14 @@ async def test_energy_unique_id_is_migrated(
     migrated = entity_registry.async_get(old.entity_id)
     assert migrated is not None
     assert migrated.unique_id == f"{DOMAIN}_{SERIAL}_energy_total"
+
+
+async def test_device_link_points_at_the_site_not_the_api(
+    hass: HomeAssistant, mock_api, config_entry
+) -> None:
+    """The device's Visit link goes to the customer site, not the JSON API."""
+    await setup_integration(hass, config_entry)
+
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, SERIAL)})
+    assert device is not None
+    assert device.configuration_url == "https://chargesentry.uk"

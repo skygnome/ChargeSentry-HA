@@ -25,7 +25,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import ACTIVE_CHARGING_STATUSES, DOMAIN, STATUS_OPTIONS
+from .const import DOMAIN, STATUS_OPTIONS
 from .coordinator import ChargeSentryData, ChargeSentryDataUpdateCoordinator
 from .entity import ChargeSentryEntity
 
@@ -39,22 +39,23 @@ def _status(data: ChargeSentryData) -> str | None:
 
 
 def _live_power(data: ChargeSentryData) -> float | None:
-    """Return live power, forced to zero when the charger is not charging.
+    """Return live power, forced to zero when nothing is running.
 
     ``ha/details.php`` reports the most recent meter value within the last 30
     days, with no "is this reading current" filter — so an idle charger keeps
-    echoing the last power it ever drew. Anchoring to the connector status
-    keeps history and the Energy dashboard honest.
+    echoing the last power it ever drew. ``power_is_live`` decides whether the
+    reading describes now, which keeps history and the Energy dashboard honest
+    without flattening a live session that is merely paused.
     """
-    if data.status not in ACTIVE_CHARGING_STATUSES:
+    if not data.power_is_live:
         return 0.0
     value = data.live.get("power_w")
     return float(value) if value is not None else None
 
 
 def _live_current(data: ChargeSentryData) -> float | None:
-    """Return live current, zeroed when not charging (see :func:`_live_power`)."""
-    if data.status not in ACTIVE_CHARGING_STATUSES:
+    """Return live current, zeroed when nothing is running (see :func:`_live_power`)."""
+    if not data.power_is_live:
         return 0.0
     value = data.live.get("current_a")
     return float(value) if value is not None else None
@@ -86,8 +87,7 @@ def _meter_wh(data: ChargeSentryData) -> float | None:
 
 def _session_id(data: ChargeSentryData) -> int | None:
     """Return the id of the session in progress, if any."""
-    value = data.live.get("session_id")
-    return int(value) if value is not None else None
+    return data.session_id
 
 
 def _session_started(data: ChargeSentryData) -> Any:

@@ -1,21 +1,30 @@
 # Brand assets
 
-| File | Size | Used for |
+`logo.png` here is the **master artwork** — full resolution, transparent, not
+shipped to Home Assistant. Everything Home Assistant actually serves is
+generated from it into
+[`custom_components/chargesentry_rest/brand/`](../custom_components/chargesentry_rest/brand):
+
+```bash
+python3 scripts/generate_brand_images.py
+```
+
+| Generated file | Size | Used for |
 |---|---|---|
-| `logo.png` | 512 × 427 | Full lockup — badge and wordmark |
-| `logo@2x.png` | 1024 × 853 | Retina lockup |
-| `icon.png` | 256 × 256 | Integration icon — badge only |
+| `icon.png` | 256 × 256 | Integration icon — badge only, wordmark cropped off |
 | `icon@2x.png` | 512 × 512 | Retina icon |
+| `logo.png` | 307 × 256 | Full lockup — badge and wordmark |
+| `logo@2x.png` | 615 × 512 | Retina lockup |
 
-All four are RGBA with a transparent background and trimmed of surrounding
-whitespace, which is what the Home Assistant brands repository requires.
+The sizes are not arbitrary: Home Assistant applies the
+[brands repository specification](https://github.com/home-assistant/brands#image-specification)
+to local images too. Icons must be exactly square at 256/512 px, and a logo's
+*shortest* side must be 128–256 px (256–512 px for `@2x`) — which is why the
+master, at 677 × 564, cannot be shipped as-is.
 
-`logo.png` is the source artwork. The other three are derived from it: the
-icons are the badge with the wordmark cropped off, padded to a square; the
-`@2x` files are the same images at double resolution. To regenerate them after
-replacing the artwork, drop the new lockup in as `brand/logo.png` and re-run
-the crop — the badge occupies everything above the wordmark, so the only value
-worth re-checking is where that split falls.
+If you replace the master, re-run the script. The only value in it worth
+re-checking is `BADGE_BOTTOM`, the row where the wordmark starts, since that is
+what separates the icon from the lockup.
 
 Palette:
 
@@ -25,25 +34,18 @@ Palette:
 | Wordmark teal | `#17877A` |
 | Mint (field) | `#6FD3AC` – `#E9FBF3` |
 
-## Getting the logo to show inside Home Assistant
+## Why the images live inside the integration directory
 
-Home Assistant does **not** read brand images out of a custom integration's
-folder — it loads them from the
-[`home-assistant/brands`](https://github.com/home-assistant/brands) repository
-by domain. Until a submission is merged there, ChargeSentry shows as a generic
-puzzle-piece in the HA UI, and the images here only appear in the README and
-in HACS.
+Home Assistant **2026.3** added support for custom integrations shipping their
+own brand images: it reads them from a `brand/` directory *inside the
+integration*, and they take precedence over the
+[brands repository](https://github.com/home-assistant/brands) CDN.
 
-To fix that, open a PR against `home-assistant/brands` adding the four files
-above at:
+That is the only location that works. Images in this repository-root folder are
+never read by Home Assistant — they only show up in the README and in HACS.
+Before 2026.3 the sole option was a PR against `home-assistant/brands` adding
+`custom_integrations/chargesentry_rest/`; that is no longer necessary, and on
+2026.3+ the local files win even if such a submission also exists.
 
-```
-custom_integrations/chargesentry_rest/logo.png
-custom_integrations/chargesentry_rest/logo@2x.png
-custom_integrations/chargesentry_rest/icon.png
-custom_integrations/chargesentry_rest/icon@2x.png
-```
-
-Note the `custom_integrations/` prefix — that is the directory for
-integrations distributed outside HA core, which is what this is. The domain
-directory must be `chargesentry_rest`, matching `manifest.json`.
+On Home Assistant older than 2026.3 the `brand/` directory is simply ignored
+and the integration shows the default placeholder icon. Nothing breaks.
