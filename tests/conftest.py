@@ -88,6 +88,25 @@ def mock_api(aioclient_mock: AiohttpClientMocker) -> AiohttpClientMocker:
     return aioclient_mock
 
 
+def mock_api_with_live(
+    aioclient_mock: AiohttpClientMocker, **live_overrides: Any
+) -> AiohttpClientMocker:
+    """Mock a healthy API whose live feed carries ``live_overrides``."""
+    aioclient_mock.get(f"{BASE}/v1/charger/{SERIAL}/connected", json=CONNECTED_PAYLOAD)
+    aioclient_mock.get(
+        f"{BASE}/v1/charger/{CHARGER_ID}/details",
+        json={"success": True, "charger": {"id": CHARGER_ID, "name": "Home Charger"}},
+    )
+    aioclient_mock.get(
+        f"{BASE}/v1/live/details/{SERIAL}", json={**LIVE_PAYLOAD, **live_overrides}
+    )
+    aioclient_mock.get(f"{BASE}/v1/live/energy/{SERIAL}", json=ENERGY_PAYLOAD)
+    aioclient_mock.get(
+        f"{BASE}/v1/account/delaystatus/{CHARGER_ID}/1", json=DELAY_PAYLOAD
+    )
+    return aioclient_mock
+
+
 @pytest.fixture
 def config_entry() -> MockConfigEntry:
     """Return a config entry for one charger."""

@@ -24,7 +24,6 @@ from .api import (
     ChargeSentryNotFoundError,
 )
 from .const import (
-    ACTIVE_CHARGING_STATUSES,
     CONF_BASE_URL,
     CONF_SCAN_INTERVAL,
     CONF_SERIAL,
@@ -33,6 +32,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_WEB_URL,
     DOMAIN,
+    TRANSACTION_STATUSES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,22 +60,49 @@ class ChargeSentryData:
         return int(connector) if connector is not None else None
 
     @property
-    def session_id(self) -> int | None:
-        """Return the id of the session in progress, if there is one.
+    def transaction_active(self) -> bool:
+        """Return whether a charge is actually running on the connector.
 
-        ``ha/details.php`` only fills this in for a session with no
-        ``finishtime``, so its presence is the authoritative answer to "is a
-        charge session open" — the connector status is not. A charger can sit
-        in ``suspendedev`` or ``occupied`` for an hour with the session very
-        much still running.
+        The connector status decides this, not ``session_id``. Two API quirks
+        rule the session id out as the signal:
+
+        ``ha/details.php`` selects the newest session with ``finishtime IS
+        NULL``, where every other endpoint in the API uses ``status = '0'``. A
+        session that ended without its finish time being written therefore
+        stays "open" forever, and the charger reports a months-old session id
+        while sitting idle.
+
+        And there is no upper bound on that lookup, so the stale row is
+        returned even when the connector is plainly ``available`` or
+        ``preparing``.
+
+        The status is unambiguous by comparison: an OCPP transaction is open in
+        ``charging`` and in both suspended states, and in nothing else.
+        ``preparing`` means plugged in and waiting to be started — which is
+        exactly when a charge needs starting, not when one is running.
         """
+        return self.status in TRANSACTION_STATUSES
+
+    @property
+    def session_id(self) -> int | None:
+        """Return the id of the session in progress, or None if none is.
+
+        Suppressed unless a transaction is actually running, so a stale row
+        left behind by the ``finishtime`` quirk above is not reported as a live
+        session.
+        """
+        if not self.transaction_active:
+            return None
         value = self.live.get("session_id")
         return int(value) if value is not None else None
 
     @property
-    def session_active(self) -> bool:
-        """Return whether a charge session is currently open."""
-        return self.session_id is not None
+    def session_started(self) -> str | None:
+        """Return when the running session started, if one is running."""
+        if not self.transaction_active:
+            return None
+        value = self.live.get("started_at")
+        return str(value) if value else None
 
     @property
     def power_is_live(self) -> bool:
@@ -83,10 +110,10 @@ class ChargeSentryData:
 
         ``ha/details.php`` returns the newest meter value within the last 30
         days with no freshness check, so an idle charger keeps echoing the last
-        power it ever drew. A reading is only trustworthy while a session is
-        open or the connector says it is charging.
+        power it ever drew. Only a running transaction makes that reading
+        trustworthy.
         """
-        return self.session_active or self.status in ACTIVE_CHARGING_STATUSES
+        return self.transaction_active
 
 
 def _option(entry: ConfigEntry, key: str, default: Any = None) -> Any:

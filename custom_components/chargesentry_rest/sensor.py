@@ -91,9 +91,9 @@ def _session_id(data: ChargeSentryData) -> int | None:
 
 
 def _session_started(data: ChargeSentryData) -> Any:
-    """Return when the session in progress started, as an aware datetime."""
-    value = data.live.get("started_at")
-    return dt_util.parse_datetime(str(value)) if value else None
+    """Return when the running session started, as an aware datetime."""
+    value = data.session_started
+    return dt_util.parse_datetime(value) if value else None
 
 
 def _connector(data: ChargeSentryData) -> int | None:

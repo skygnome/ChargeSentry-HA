@@ -19,9 +19,9 @@ from .conftest import (
     CHARGER_ID,
     CONNECTED_PAYLOAD,
     DELAY_PAYLOAD,
-    ENERGY_PAYLOAD,
     LIVE_PAYLOAD,
     SERIAL,
+    mock_api_with_live,
     setup_integration,
 )
 
@@ -90,24 +90,12 @@ async def test_power_zeroed_when_idle(
     ha/details.php returns the newest meter value in the last 30 days with no
     freshness filter, so an idle charger keeps echoing its last power draw.
     """
-    aioclient_mock.get(f"{BASE}/v1/charger/{SERIAL}/connected", json=CONNECTED_PAYLOAD)
-    aioclient_mock.get(
-        f"{BASE}/v1/charger/{CHARGER_ID}/details",
-        json={"success": True, "charger": {"id": CHARGER_ID, "name": "Home Charger"}},
-    )
-    aioclient_mock.get(
-        f"{BASE}/v1/live/details/{SERIAL}",
-        json={
-            **LIVE_PAYLOAD,
-            "status": "available",
-            "plugged_in": False,
-            "session_id": None,
-            "started_at": None,
-        },
-    )
-    aioclient_mock.get(f"{BASE}/v1/live/energy/{SERIAL}", json=ENERGY_PAYLOAD)
-    aioclient_mock.get(
-        f"{BASE}/v1/account/delaystatus/{CHARGER_ID}/1", json=DELAY_PAYLOAD
+    mock_api_with_live(
+        aioclient_mock,
+        status="available",
+        plugged_in=False,
+        session_id=None,
+        started_at=None,
     )
 
     await setup_integration(hass, config_entry)
@@ -127,19 +115,7 @@ async def test_paused_session_is_still_on(
     while the vehicle pauses even though the session is still open. Keying the
     switch on the status left it off mid-charge.
     """
-    aioclient_mock.get(f"{BASE}/v1/charger/{SERIAL}/connected", json=CONNECTED_PAYLOAD)
-    aioclient_mock.get(
-        f"{BASE}/v1/charger/{CHARGER_ID}/details",
-        json={"success": True, "charger": {"id": CHARGER_ID, "name": "Home Charger"}},
-    )
-    aioclient_mock.get(
-        f"{BASE}/v1/live/details/{SERIAL}",
-        json={**LIVE_PAYLOAD, "status": "suspendedev", "power_w": 0.0},
-    )
-    aioclient_mock.get(f"{BASE}/v1/live/energy/{SERIAL}", json=ENERGY_PAYLOAD)
-    aioclient_mock.get(
-        f"{BASE}/v1/account/delaystatus/{CHARGER_ID}/1", json=DELAY_PAYLOAD
-    )
+    mock_api_with_live(aioclient_mock, status="suspendedev", power_w=0.0)
 
     await setup_integration(hass, config_entry)
 
