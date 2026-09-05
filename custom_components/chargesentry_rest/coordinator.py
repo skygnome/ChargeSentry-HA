@@ -1,55 +1,199 @@
-from __future__ import annotations
-import logging
-from datetime import timedelta
-from urllib.parse import quote  # <-- add this
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-import aiohttp
+"""Data update coordinator for ChargeSentry."""
 
-from .const import LIVE_URL, ENERGY_URL
+from __future__ import annotations
+
+import asyncio
+import logging
+from dataclasses import dataclass, field
+from datetime import timedelta
+from typing import Any
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+
+from .api import (
+    ChargeSentryApiClient,
+    ChargeSentryAuthError,
+    ChargeSentryConnectionError,
+    ChargeSentryError,
+    ChargeSentryForbiddenError,
+    ChargeSentryNotFoundError,
+)
+from .const import (
+    CONF_BASE_URL,
+    CONF_SCAN_INTERVAL,
+    CONF_SERIAL,
+    CONF_TOKEN,
+    DEFAULT_BASE_URL,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
-SCAN_INTERVAL = timedelta(seconds=120)
 
-class ChargeSentryDataUpdateCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass, *, token: str, serial: str):
-        super().__init__(hass, logger=_LOGGER, name="ChargeSentry", update_interval=SCAN_INTERVAL)
-        self._token = token
-        self._serial = serial
-        self.last_status_code: int | None = None
+
+@dataclass(slots=True)
+class ChargeSentryData:
+    """One poll's worth of state for a single charger."""
+
+    live: dict[str, Any] = field(default_factory=dict)
+    energy: dict[str, Any] | None = None
+    delay: dict[str, Any] | None = None
+    online: bool | None = None
 
     @property
-    def serial(self) -> str:
-        return self._serial
+    def status(self) -> str | None:
+        """Return the connector status, lower-cased."""
+        status = self.live.get("status")
+        return str(status).lower() if status else None
 
-    def _fmt(self, template: str) -> str:
-        """Replace {serial} if present; leave as-is otherwise. URL-encode serial."""
-        if "{serial}" in template:
-            return template.format(serial=quote(self._serial, safe=""))
-        return template
+    @property
+    def connector(self) -> int | None:
+        """Return the connector the live feed is reporting on."""
+        connector = self.live.get("connector")
+        return int(connector) if connector is not None else None
 
-    async def _async_update_data(self):
-        headers = {"Authorization": f"Bearer {self._token}"}
+
+def _option(entry: ConfigEntry, key: str, default: Any = None) -> Any:
+    """Read a value from entry options, falling back to entry data."""
+    if key in entry.options:
+        return entry.options[key]
+    return entry.data.get(key, default)
+
+
+class ChargeSentryDataUpdateCoordinator(DataUpdateCoordinator[ChargeSentryData]):
+    """Poll the live endpoints for one charger."""
+
+    config_entry: ConfigEntry
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        """Set up the coordinator from a config entry."""
+        self.serial: str = str(_option(entry, CONF_SERIAL, "")).strip()
+        self._base_url: str = str(_option(entry, CONF_BASE_URL, DEFAULT_BASE_URL))
+        scan_interval = int(_option(entry, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
+
+        self.client = ChargeSentryApiClient(
+            async_get_clientsession(hass),
+            str(_option(entry, CONF_TOKEN, "")).strip(),
+            self._base_url,
+        )
+
+        # Slow-moving charger metadata, resolved once and reused for DeviceInfo.
+        self.charger_id: int | None = None
+        self.charger_name: str | None = None
+        self.vendor: str | None = None
+        self.model: str | None = None
+        self.firmware: str | None = None
+
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN} {self.serial}",
+            update_interval=timedelta(seconds=scan_interval),
+            config_entry=entry,
+        )
+
+    @property
+    def base_url(self) -> str:
+        """Return the API base URL in use."""
+        return self._base_url
+
+    async def _async_resolve_charger(self) -> None:
+        """Resolve the serial to a charger id and pull its metadata.
+
+        The live endpoints are keyed by serial, but every control endpoint
+        (start/stop/delay) is keyed by the numeric charger id, so this has to
+        happen before the switch and services can do anything.
+        """
+        charger = await self.client.async_get_charger_by_serial(self.serial)
+        self.charger_id = int(charger["id"])
+        self.charger_name = charger.get("name") or self.serial
+
         try:
-            async with aiohttp.ClientSession() as session:
-                live_url = self._fmt(LIVE_URL)
-                energy_url = self._fmt(ENERGY_URL)
+            details = await self.client.async_get_charger_details(self.charger_id)
+        except ChargeSentryError as err:
+            # details.php is gated on requireAccessOrPublic(); losing it only
+            # costs us the vendor/model/firmware labels, so carry on without.
+            _LOGGER.debug("Could not read charger details for %s: %s", self.serial, err)
+            return
 
-                async with session.get(live_url, headers=headers, timeout=20) as resp:
-                    self.last_status_code = resp.status
-                    if resp.status == 401:
-                        raise UpdateFailed("Unauthorized (401) — token invalid or expired")
-                    if resp.status == 404:
-                        raise UpdateFailed(f"Live URL not found (404): {live_url}")
-                    resp.raise_for_status()
-                    live = await resp.json()
+        self.vendor = details.get("vendor") or None
+        self.model = details.get("model") or None
+        self.firmware = details.get("firmware") or None
+        self.charger_name = details.get("name") or self.charger_name
 
-                async with session.get(energy_url, headers=headers, timeout=20) as resp:
-                    if resp.status == 404:
-                        raise UpdateFailed(f"Energy URL not found (404): {energy_url}")
-                    resp.raise_for_status()
-                    energy = await resp.json()
+    async def _async_update_data(self) -> ChargeSentryData:
+        """Fetch the live feed, energy totals and any armed delayed charge."""
+        try:
+            if self.charger_id is None:
+                await self._async_resolve_charger()
 
-                return {"serial": self._serial, "live": live, "energy": energy}
+            live_task = self.client.async_get_live_details(self.serial)
+            energy_task = self.client.async_get_energy(self.serial)
+            connected_task = self.client.async_get_charger_by_serial(self.serial)
 
-        except Exception as err:
+            live_res, energy_res, connected_res = await asyncio.gather(
+                live_task, energy_task, connected_task, return_exceptions=True
+            )
+
+            # The live feed is the one that has to succeed.
+            if isinstance(live_res, BaseException):
+                raise live_res
+            live: dict[str, Any] = live_res
+
+            energy: dict[str, Any] | None = None
+            if isinstance(energy_res, ChargeSentryNotFoundError):
+                # "no meter data recorded" — normal on a charger that has never
+                # delivered a kWh. Leave the energy sensors unknown.
+                _LOGGER.debug("No meter data yet for %s", self.serial)
+            elif isinstance(energy_res, BaseException):
+                if isinstance(
+                    energy_res, (ChargeSentryAuthError, ChargeSentryForbiddenError)
+                ):
+                    raise energy_res
+                _LOGGER.debug("Energy fetch failed for %s: %s", self.serial, energy_res)
+            else:
+                energy = energy_res
+
+            online: bool | None = None
+            if not isinstance(connected_res, BaseException):
+                online = str(connected_res.get("online", "")) == "1"
+
+            delay = await self._async_fetch_delay(live)
+
+            return ChargeSentryData(
+                live=live, energy=energy, delay=delay, online=online
+            )
+
+        except ChargeSentryAuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+        except ChargeSentryForbiddenError as err:
+            raise UpdateFailed(
+                f"{self.serial}: this account does not administer the charger ({err})"
+            ) from err
+        except ChargeSentryNotFoundError as err:
+            raise UpdateFailed(f"{self.serial}: {err}") from err
+        except ChargeSentryConnectionError as err:
             raise UpdateFailed(str(err)) from err
+        except ChargeSentryError as err:
+            raise UpdateFailed(str(err)) from err
+
+    async def _async_fetch_delay(self, live: dict[str, Any]) -> dict[str, Any] | None:
+        """Return the delayed-charge status for the live connector, if readable."""
+        if self.charger_id is None:
+            return None
+        connector = live.get("connector")
+        if connector is None:
+            return None
+        try:
+            return await self.client.async_get_delay_status(
+                self.charger_id, int(connector)
+            )
+        except (ChargeSentryAuthError, ChargeSentryForbiddenError):
+            raise
+        except ChargeSentryError as err:
+            _LOGGER.debug("Delay status unavailable for %s: %s", self.serial, err)
+            return None

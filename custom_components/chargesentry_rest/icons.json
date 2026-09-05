@@ -1,0 +1,69 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "plugged_in": {
+        "default": "mdi:ev-plug-type2"
+      },
+      "charging": {
+        "default": "mdi:battery-charging"
+      },
+      "delay_armed": {
+        "default": "mdi:timer-outline",
+        "state": {
+          "off": "mdi:timer-off-outline"
+        }
+      },
+      "fault": {
+        "default": "mdi:alert-circle-outline"
+      },
+      "online": {
+        "default": "mdi:cloud-check-outline"
+      }
+    },
+    "sensor": {
+      "status": {
+        "default": "mdi:ev-station"
+      },
+      "energy_total": {
+        "default": "mdi:counter"
+      },
+      "energy_today": {
+        "default": "mdi:lightning-bolt"
+      },
+      "session_started": {
+        "default": "mdi:clock-start"
+      },
+      "delay_countdown": {
+        "default": "mdi:timer-sand"
+      },
+      "session_id": {
+        "default": "mdi:identifier"
+      },
+      "connector": {
+        "default": "mdi:power-socket-eu"
+      },
+      "meter_reading": {
+        "default": "mdi:gauge"
+      }
+    },
+    "switch": {
+      "charging": {
+        "default": "mdi:ev-station"
+      }
+    }
+  },
+  "services": {
+    "start_charge": {
+      "service": "mdi:play"
+    },
+    "stop_charge": {
+      "service": "mdi:stop"
+    },
+    "delay_start": {
+      "service": "mdi:timer-outline"
+    },
+    "cancel_delay": {
+      "service": "mdi:timer-off-outline"
+    }
+  }
+}
