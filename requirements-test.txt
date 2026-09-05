@@ -1,5 +1,9 @@
-homeassistant==2025.8.3
+# Unpinned on purpose: pytest-homeassistant-custom-component tracks a specific
+# Home Assistant release, so pinning one without the other breaks the install.
+# CI runs against whatever is current, which is what users will be on.
+homeassistant
 pytest
 pytest-homeassistant-custom-component
+pillow
 pyyaml
 ruff

@@ -13,6 +13,7 @@ CONF_BASE_URL: Final = "base_url"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 
 DEFAULT_BASE_URL: Final = "https://api.chargesentry.uk"
+DEFAULT_WEB_URL: Final = "https://chargesentry.uk"
 DEFAULT_SCAN_INTERVAL: Final = 60  # seconds
 MIN_SCAN_INTERVAL: Final = 15
 MAX_SCAN_INTERVAL: Final = 3600
@@ -59,7 +60,9 @@ STATUS_OPTIONS: Final = [
     STATUS_UNKNOWN,
 ]
 
-# Statuses that mean current is actually flowing into the vehicle.
+# Statuses that mean current is actually flowing into the vehicle. Used to
+# decide whether a meter reading is live; whether a *session* is open is
+# answered by ``session_id``, not by these.
 ACTIVE_CHARGING_STATUSES: Final = {STATUS_CHARGING}
 
 # Delayed-charge states that count as "something is armed or running".

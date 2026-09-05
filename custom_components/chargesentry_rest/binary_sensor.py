@@ -16,7 +16,6 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
-    ACTIVE_CHARGING_STATUSES,
     DELAY_ACTIVE_STATES,
     DOMAIN,
     STATUS_FAULTED,
@@ -32,9 +31,13 @@ def _plugged_in(data: ChargeSentryData) -> bool | None:
 
 
 def _charging(data: ChargeSentryData) -> bool | None:
-    """Return whether the connector is actively delivering energy."""
-    status = data.status
-    return status in ACTIVE_CHARGING_STATUSES if status else None
+    """Return whether a charge session is open on the charger.
+
+    Matches the Charging switch: keyed on the session, not the connector
+    status, so a paused or scheduled charge still reads as on. The Status
+    sensor carries the OCPP-level detail.
+    """
+    return data.session_active
 
 
 def _faulted(data: ChargeSentryData) -> bool | None:

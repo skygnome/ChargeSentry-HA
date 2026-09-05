@@ -16,7 +16,6 @@ from homeassistant.helpers.entity_platform import (
 
 from .api import ChargeSentryError
 from .const import (
-    ACTIVE_CHARGING_STATUSES,
     ATTR_CONNECTOR,
     ATTR_DELAY_SECONDS,
     ATTR_LIMIT_KWH,
@@ -77,10 +76,16 @@ async def async_setup_entry(
 
 
 class ChargeSentryChargingSwitch(ChargeSentryEntity, SwitchEntity):
-    """Start and stop a charge on the charger's active connector.
+    """Start and stop a charge session on the charger's active connector.
 
-    ``is_on`` reflects the connector status reported by the API, so it can lag
-    a command by up to one poll while the charge point acknowledges it.
+    On means a session is open — the charger reports a ``session_id`` with no
+    finish time. That is deliberately not the same as "current is flowing":
+    a plugged-in car that has paused (``suspendedev``) or a charge waiting on
+    a schedule still has its session open, and turning the switch off is still
+    what ends it. Look at the Status sensor for the connector's OCPP state.
+
+    The state can lag a command by up to one poll while the charge point
+    acknowledges it.
     """
 
     _attr_translation_key = "charging"
@@ -91,11 +96,11 @@ class ChargeSentryChargingSwitch(ChargeSentryEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        """Return whether a charge is currently in progress."""
+        """Return whether a charge session is currently open."""
         data = self.data
-        if data is None or data.status is None:
+        if data is None:
             return None
-        return data.status in ACTIVE_CHARGING_STATUSES
+        return data.session_active
 
     def _resolve_connector(self, connector: int | None) -> int:
         """Return the connector to act on, defaulting to the live one."""

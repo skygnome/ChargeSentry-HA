@@ -28,7 +28,7 @@ class ChargeSentryEntity(CoordinatorEntity[ChargeSentryDataUpdateCoordinator]):
             model=coordinator.model or "OCPP charge point",
             sw_version=coordinator.firmware,
             serial_number=coordinator.serial,
-            configuration_url=coordinator.base_url,
+            configuration_url=coordinator.web_url,
         )
 
     @property

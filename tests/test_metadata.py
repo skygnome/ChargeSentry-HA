@@ -84,3 +84,47 @@ def test_icons_reference_known_entities() -> None:
     for domain, entries in icons["entity"].items():
         assert set(entries) <= set(strings["entity"][domain])
     assert set(icons["services"]) == set(strings["services"])
+
+
+def test_shipped_brand_images_meet_the_specification() -> None:
+    """The brand/ directory HA reads must satisfy the brands image spec.
+
+    Home Assistant 2026.3+ serves these files directly out of the integration
+    directory, applying the same rules as the brands repository: icons exactly
+    square at 256/512, and a logo whose *shortest* side is 128-256 (256-512 for
+    @2x). Getting a size wrong means a silently broken image in the UI.
+    """
+    from PIL import Image
+
+    brand = COMPONENT / "brand"
+
+    for name, size in (("icon.png", 256), ("icon@2x.png", 512)):
+        with Image.open(brand / name) as image:
+            assert image.size == (size, size), f"{name} must be {size}x{size}"
+            assert image.mode == "RGBA", f"{name} must have an alpha channel"
+
+    for name, low, high in (("logo.png", 128, 256), ("logo@2x.png", 256, 512)):
+        with Image.open(brand / name) as image:
+            shortest = min(image.size)
+            assert low <= shortest <= high, (
+                f"{name} shortest side is {shortest}, must be {low}-{high}"
+            )
+            assert image.mode == "RGBA", f"{name} must have an alpha channel"
+
+
+def test_brand_images_are_trimmed() -> None:
+    """No transparent border, beyond the padding that squares an icon."""
+    from PIL import Image
+
+    brand = COMPONENT / "brand"
+
+    for name in ("logo.png", "logo@2x.png"):
+        with Image.open(brand / name) as image:
+            assert image.getbbox() == (0, 0, *image.size), f"{name} is not trimmed"
+
+    # An icon is a landscape badge on a square canvas, so it is trimmed
+    # horizontally only; vertical bands are unavoidable.
+    for name in ("icon.png", "icon@2x.png"):
+        with Image.open(brand / name) as image:
+            left, _top, right, _bottom = image.getbbox()
+            assert (left, right) == (0, image.width), f"{name} has a side border"

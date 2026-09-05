@@ -7,6 +7,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -23,12 +24,14 @@ from .api import (
     ChargeSentryNotFoundError,
 )
 from .const import (
+    ACTIVE_CHARGING_STATUSES,
     CONF_BASE_URL,
     CONF_SCAN_INTERVAL,
     CONF_SERIAL,
     CONF_TOKEN,
     DEFAULT_BASE_URL,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_WEB_URL,
     DOMAIN,
 )
 
@@ -55,6 +58,35 @@ class ChargeSentryData:
         """Return the connector the live feed is reporting on."""
         connector = self.live.get("connector")
         return int(connector) if connector is not None else None
+
+    @property
+    def session_id(self) -> int | None:
+        """Return the id of the session in progress, if there is one.
+
+        ``ha/details.php`` only fills this in for a session with no
+        ``finishtime``, so its presence is the authoritative answer to "is a
+        charge session open" — the connector status is not. A charger can sit
+        in ``suspendedev`` or ``occupied`` for an hour with the session very
+        much still running.
+        """
+        value = self.live.get("session_id")
+        return int(value) if value is not None else None
+
+    @property
+    def session_active(self) -> bool:
+        """Return whether a charge session is currently open."""
+        return self.session_id is not None
+
+    @property
+    def power_is_live(self) -> bool:
+        """Return whether the reported meter values describe right now.
+
+        ``ha/details.php`` returns the newest meter value within the last 30
+        days with no freshness check, so an idle charger keeps echoing the last
+        power it ever drew. A reading is only trustworthy while a session is
+        open or the connector says it is charging.
+        """
+        return self.session_active or self.status in ACTIVE_CHARGING_STATUSES
 
 
 def _option(entry: ConfigEntry, key: str, default: Any = None) -> Any:
@@ -100,6 +132,23 @@ class ChargeSentryDataUpdateCoordinator(DataUpdateCoordinator[ChargeSentryData])
     def base_url(self) -> str:
         """Return the API base URL in use."""
         return self._base_url
+
+    @property
+    def web_url(self) -> str:
+        """Return the customer-facing site, for the device's "Visit" link.
+
+        The API lives on an ``api.`` subdomain that serves JSON and nothing a
+        person can use, so the device link drops that label: api.example.com
+        becomes example.com. A base URL that is not an ``api.`` host is left
+        alone, since there is nothing to infer from it.
+        """
+        parsed = urlparse(self._base_url)
+        if not parsed.hostname:
+            return DEFAULT_WEB_URL
+        if not parsed.hostname.startswith("api."):
+            return self._base_url
+        port = f":{parsed.port}" if parsed.port else ""
+        return f"{parsed.scheme}://{parsed.hostname.removeprefix('api.')}{port}"
 
     async def _async_resolve_charger(self) -> None:
         """Resolve the serial to a charger id and pull its metadata.

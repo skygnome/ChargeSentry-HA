@@ -14,7 +14,16 @@ from custom_components.chargesentry_rest.const import (
     SERVICE_START_CHARGE,
 )
 
-from .conftest import BASE, CHARGER_ID, setup_integration
+from .conftest import (
+    BASE,
+    CHARGER_ID,
+    CONNECTED_PAYLOAD,
+    DELAY_PAYLOAD,
+    ENERGY_PAYLOAD,
+    LIVE_PAYLOAD,
+    SERIAL,
+    setup_integration,
+)
 
 SWITCH = "switch.home_charger_charging"
 
@@ -166,4 +175,48 @@ async def test_rejected_command_raises(
     with pytest.raises(HomeAssistantError, match="Insufficient credit"):
         await hass.services.async_call(
             "switch", SERVICE_TURN_ON, {ATTR_ENTITY_ID: SWITCH}, blocking=True
+        )
+
+
+async def test_switch_follows_the_session_not_the_status(
+    hass: HomeAssistant, aioclient_mock, config_entry
+) -> None:
+    """No open session means off, whatever the connector status says."""
+    aioclient_mock.get(f"{BASE}/v1/charger/{SERIAL}/connected", json=CONNECTED_PAYLOAD)
+    aioclient_mock.get(
+        f"{BASE}/v1/charger/{CHARGER_ID}/details",
+        json={"success": True, "charger": {"id": CHARGER_ID, "name": "Home Charger"}},
+    )
+    aioclient_mock.get(
+        f"{BASE}/v1/live/details/{SERIAL}",
+        json={**LIVE_PAYLOAD, "status": "occupied", "session_id": None},
+    )
+    aioclient_mock.get(f"{BASE}/v1/live/energy/{SERIAL}", json=ENERGY_PAYLOAD)
+    aioclient_mock.get(
+        f"{BASE}/v1/account/delaystatus/{CHARGER_ID}/1", json=DELAY_PAYLOAD
+    )
+
+    await setup_integration(hass, config_entry)
+    assert hass.states.get(SWITCH).state == "off"
+
+
+async def test_stopping_someone_elses_session_reports_why(
+    hass: HomeAssistant, mock_api, config_entry
+) -> None:
+    """Stopcharge only ends the caller's own session; say so rather than fail mute.
+
+    ha/details.php reports any open session on the charger, including one
+    started by another account's RFID card, so the switch can legitimately be
+    on for a session this token cannot stop.
+    """
+    await setup_integration(hass, config_entry)
+    mock_api.get(
+        f"{BASE}/v1/account/stopcharge/{CHARGER_ID}/1",
+        status=404,
+        json={"success": False, "message": "No active session for this user"},
+    )
+
+    with pytest.raises(HomeAssistantError, match="No active session for this user"):
+        await hass.services.async_call(
+            "switch", SERVICE_TURN_OFF, {ATTR_ENTITY_ID: SWITCH}, blocking=True
         )

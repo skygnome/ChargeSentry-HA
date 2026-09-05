@@ -160,5 +160,8 @@ ruff format .   # format
 CI runs [hassfest](https://developers.home-assistant.io/blog/2020/04/16/hassfest),
 the HACS validator, ruff and the test suite on every push and pull request.
 
-Brand assets and how to get the logo showing inside Home Assistant itself:
-[`brand/README.md`](brand/README.md).
+The integration ships its own icon and logo in
+`custom_components/chargesentry_rest/brand/`, which Home Assistant 2026.3 and
+later read directly — no brands-repository submission needed. On older versions
+the folder is ignored and you get the default placeholder. Master artwork and
+the regeneration script are documented in [`brand/README.md`](brand/README.md).
