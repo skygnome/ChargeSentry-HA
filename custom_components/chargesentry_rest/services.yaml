@@ -1,0 +1,97 @@
+start_charge:
+  target:
+    entity:
+      integration: chargesentry_rest
+      domain: switch
+  fields:
+    connector:
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 8
+          mode: box
+    limit_kwh:
+      required: false
+      example: 20
+      selector:
+        number:
+          min: 0.1
+          max: 500
+          step: 0.1
+          unit_of_measurement: kWh
+          mode: box
+
+stop_charge:
+  target:
+    entity:
+      integration: chargesentry_rest
+      domain: switch
+  fields:
+    connector:
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 8
+          mode: box
+
+delay_start:
+  target:
+    entity:
+      integration: chargesentry_rest
+      domain: switch
+  fields:
+    delay_seconds:
+      required: true
+      example: 3600
+      selector:
+        number:
+          min: 1
+          max: 86400
+          unit_of_measurement: s
+          mode: box
+    run_for_seconds:
+      required: false
+      example: 25200
+      selector:
+        number:
+          min: 1
+          max: 86400
+          unit_of_measurement: s
+          mode: box
+    connector:
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 8
+          mode: box
+    limit_kwh:
+      required: false
+      example: 20
+      selector:
+        number:
+          min: 0.1
+          max: 500
+          step: 0.1
+          unit_of_measurement: kWh
+          mode: box
+
+cancel_delay:
+  target:
+    entity:
+      integration: chargesentry_rest
+      domain: switch
+  fields:
+    connector:
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 8
+          mode: box

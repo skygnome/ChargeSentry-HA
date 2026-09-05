@@ -1,1 +1,6 @@
-{ "name": "ChargeSentry (REST)", "country": "GB" }
+{
+  "name": "ChargeSentry",
+  "country": "GB",
+  "homeassistant": "2024.11.0",
+  "render_readme": true
+}
